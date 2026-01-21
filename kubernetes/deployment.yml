@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: mern-spotify-clone
-          image: xjohnfit/mern-spotify-clone:1.0.0-9
+          image: xjohnfit/mern-spotify-clone:1.0.0-10
           resources:
             limits:
               cpu: "1"
