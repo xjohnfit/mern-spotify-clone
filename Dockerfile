@@ -5,11 +5,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
- # Set public environment variables for Vite build
- ENV VITE_CLERK_PUBLISHABLE_KEY=pk_test_dml0YWwtbWFnZ290LTYxLmNsZXJrLmFjY291bnRzLmRldiQ
- ENV VITE_API_URL=https://streamify.codewithxjohn.com/api
- ENV VITE_BACKEND_URL=https://streamify.codewithxjohn.com
- RUN npm run build
+RUN npm run build
 
 # --- Backend Build Stage ---
 FROM node:20-alpine AS backend-build
