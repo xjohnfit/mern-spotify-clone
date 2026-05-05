@@ -1,0 +1,148 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'kubernetes/**'
+      - 'README.md'
+      - '.gitignore'
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        scanners: 'vuln,secret,misconfig'
+        exit-code: '0'  # Don't fail the build, just show results
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: [trivy-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v6
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKERHUB_USERNAME }}/streamify-backend
+        tags: |
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push backend
+      uses: docker/build-push-action@v6
+      with:
+        context: ./backend
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/streamify-backend:buildcache
+        cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/streamify-backend:buildcache,mode=max
+    
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKERHUB_USERNAME }}/streamify-frontend
+        tags: |
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push frontend
+      uses: docker/build-push-action@v6
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/streamify-frontend:buildcache
+        cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/streamify-frontend:buildcache,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v6
+    
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: 'latest'
+    
+    - name: Set up kubeconfig
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+    
+    - name: Set image tags
+      id: image-tags
+      run: |
+        echo "IMAGE_TAG=main-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+    
+    - name: Create or update Kubernetes secrets
+      run: |
+        # Delete existing secret if it exists (ignore errors if it doesn't)
+        kubectl delete secret streamify-secrets --ignore-not-found=true
+        
+        # Create new secret from GitHub Actions secrets
+        kubectl create secret generic streamify-secrets \
+          --from-literal=MONGODB_URI="${{ secrets.MONGODB_URI }}" \
+          --from-literal=ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}" \
+          --from-literal=CLOUDINARY_CLOUD_NAME="${{ secrets.CLOUDINARY_CLOUD_NAME }}" \
+          --from-literal=CLOUDINARY_API_KEY="${{ secrets.CLOUDINARY_API_KEY }}" \
+          --from-literal=CLOUDINARY_API_SECRET="${{ secrets.CLOUDINARY_API_SECRET }}" \
+          --from-literal=CLERK_SECRET_KEY="${{ secrets.CLERK_SECRET_KEY }}" \
+          --from-literal=CLERK_PUBLISHABLE_KEY="${{ secrets.CLERK_PUBLISHABLE_KEY }}"
+    
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f kubernetes/cluster-issuer-staging.yml
+        kubectl apply -f kubernetes/cluster-issuer-prod.yml
+        kubectl apply -f kubernetes/backend-deployment.yml
+        kubectl apply -f kubernetes/backend-service.yml
+        kubectl apply -f kubernetes/frontend-deployment.yml
+        kubectl apply -f kubernetes/frontend-service.yml
+        kubectl apply -f kubernetes/ingress.yml
+    
+    - name: Update deployments with new image tags
+      run: |
+        kubectl set image deployment/streamify-backend backend=${{ secrets.DOCKERHUB_USERNAME }}/streamify-backend:${{ steps.image-tags.outputs.IMAGE_TAG }}
+        kubectl set image deployment/streamify-frontend frontend=${{ secrets.DOCKERHUB_USERNAME }}/streamify-frontend:${{ steps.image-tags.outputs.IMAGE_TAG }}
+    
+    - name: Wait for rollout to complete
+      run: |
+        kubectl rollout status deployment/streamify-backend --timeout=5m
+        kubectl rollout status deployment/streamify-frontend --timeout=5m
+    
+    - name: Verify deployment
+      run: |
+        kubectl get pods -l app=streamify-backend
+        kubectl get pods -l app=streamify-frontend
+        kubectl get ingress streamify-ingress

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamify-frontend
+  labels:
+    app: streamify-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: streamify-frontend
+  template:
+    metadata:
+      labels:
+        app: streamify-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: xjohnfit/streamify-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

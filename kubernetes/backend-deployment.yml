@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamify-backend
+  labels:
+    app: streamify-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: streamify-backend
+  template:
+    metadata:
+      labels:
+        app: streamify-backend
+    spec:
+      containers:
+      - name: backend
+        image: xjohnfit/streamify-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000  # BACKEND_PORT
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "5000"  # BACKEND_PORT
+        - name: CLIENT_URL
+          value: "https://streamify.codewithxjohn.com"
+        # Add all your environment variables from secrets
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: MONGODB_URI
+        - name: ADMIN_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: ADMIN_EMAIL
+        - name: CLOUDINARY_CLOUD_NAME
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: CLOUDINARY_CLOUD_NAME
+        - name: CLOUDINARY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: CLOUDINARY_API_KEY
+        - name: CLOUDINARY_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: CLOUDINARY_API_SECRET
+        - name: CLERK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: CLERK_SECRET_KEY
+        - name: CLERK_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: streamify-secrets
+              key: CLERK_PUBLISHABLE_KEY
+        
+        # Add other secrets as needed
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+        livenessProbe:
+          httpGet:
+            path: /api/health  # HEALTH_ENDPOINT
+            port: 5000  # BACKEND_PORT
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health  # HEALTH_ENDPOINT
+            port: 5000  # BACKEND_PORT
+          initialDelaySeconds: 5
+          periodSeconds: 5

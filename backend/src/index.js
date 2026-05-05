@@ -8,6 +8,9 @@ import { createServer } from 'http';
 import cron from 'node-cron';
 import fs from 'fs';
 
+import { setServers } from "node:dns/promises";
+setServers(["1.1.1.1", "8.8.8.8"]);
+
 
 //Files imported
 import { connectDB } from './db.js';
@@ -62,9 +65,6 @@ cron.schedule('0 * * * *', () => {
 	}
 });
 
-
-
-
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
@@ -77,14 +77,14 @@ app.use((error, req, res, next) => {
     res.status(500).json({ message: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : error.message });
 });
 
-if(process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, '../frontend/dist')));
-    app.get('*', (req, res) => {
-        res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
-    });
-}
+// if(process.env.NODE_ENV === 'production') {
+//     app.use(express.static(path.join(__dirname, '../frontend/dist')));
+//     app.get('*', (req, res) => {
+//         res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
+//     });
+// }
 
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
     console.log('Server is running on port ' + PORT);
     connectDB();

@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 import Song from "../models/songModel.js";
 import Album from "../models/albumModel.js";
 import { config } from "dotenv";
+import { setServers } from "node:dns/promises";
 
+setServers(["1.1.1.1", "8.8.8.8"]);
 config();
 
 const seedDatabase = async () => {
