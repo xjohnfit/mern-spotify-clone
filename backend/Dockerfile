@@ -1,22 +1,3 @@
-# Build stage
-FROM node:20-alpine AS builder
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies (including dev dependencies for build)
-RUN npm ci
-
-# Copy source code
-COPY . .
-
-# Build TypeScript
-RUN npm run build
-
-# Production stage
 FROM node:20-alpine
 
 # Create app directory
@@ -33,11 +14,11 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && \
+RUN npm ci --omit=dev && \
     npm cache clean --force
 
-# Copy built application from builder stage
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+# Copy application source
+COPY --chown=nodejs:nodejs ./src ./src
 
 # Switch to non-root user
 USER nodejs
@@ -56,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["node", "dist/index.js"]
+CMD ["node", "src/index.js"]
