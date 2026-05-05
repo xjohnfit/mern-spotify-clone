@@ -80,6 +80,8 @@ jobs:
         push: true
         tags: ${{ steps.meta-frontend.outputs.tags }}
         labels: ${{ steps.meta-frontend.outputs.labels }}
+        build-args: |
+          VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}
         cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/streamify-frontend:buildcache
         cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/streamify-frontend:buildcache,mode=max
 
