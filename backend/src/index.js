@@ -72,6 +72,11 @@ app.use('/api/songs', songsRoutes);
 app.use('/api/albums', albumsRoutes);
 app.use('/api/stats', statsRoutes);
 
+// Health endpoint for probes and container checks
+app.get('/api/health', (req, res) => {
+	res.status(200).json({ status: 'ok' });
+});
+
 //Error handler
 app.use((error, req, res, next) => {
     res.status(500).json({ message: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : error.message });
